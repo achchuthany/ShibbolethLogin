@@ -75,22 +75,11 @@ class SamlService {
 
       // If only header present (bad multi-line env parsing) treat as empty
       if (/^-----BEGIN CERTIFICATE-----$/.test(txt)) return null;
-
-      // If no BEGIN line assume it's just base64 body (Vercel environment variable format)
+      // If no BEGIN line assume it's just base64 body
       if (!txt.includes("BEGIN CERTIFICATE")) {
-        // Remove any whitespace and format as proper PEM
-        const base64Data = txt.replace(/\s+/g, "");
-
-        // Validate base64 format
-        if (!/^[A-Za-z0-9+/]+=*$/.test(base64Data)) {
-          console.error("[SAML ERROR] Invalid base64 certificate data");
-          return null;
-        }
-
-        // Split into 64-character lines for proper PEM format
-        const pemLines = base64Data.match(/.{1,64}/g) || [];
-        txt = `-----BEGIN CERTIFICATE-----\n${pemLines.join(
-          "\n"
+        txt = `-----BEGIN CERTIFICATE-----\n${txt.replace(
+          /\s+/g,
+          ""
         )}\n-----END CERTIFICATE-----`;
       }
       return txt;
@@ -102,19 +91,9 @@ class SamlService {
       if (/^-----BEGIN (?:RSA )?PRIVATE KEY-----$/.test(txt)) return null;
 
       if (!txt.includes("BEGIN")) {
-        // Remove any whitespace and format as proper PEM
-        const base64Data = txt.replace(/\s+/g, "");
-
-        // Validate base64 format
-        if (!/^[A-Za-z0-9+/]+=*$/.test(base64Data)) {
-          console.error("[SAML ERROR] Invalid base64 private key data");
-          return null;
-        }
-
-        // Split into 64-character lines for proper PEM format
-        const pemLines = base64Data.match(/.{1,64}/g) || [];
-        txt = `-----BEGIN PRIVATE KEY-----\n${pemLines.join(
-          "\n"
+        txt = `-----BEGIN PRIVATE KEY-----\n${txt.replace(
+          /\s+/g,
+          ""
         )}\n-----END PRIVATE KEY-----`;
       }
       return txt;
