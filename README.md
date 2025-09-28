@@ -61,6 +61,105 @@ Note: The application maps common OIDs automatically:
 - uid → `urn:oid:0.9.2342.19200300.100.1.1`
 - mail → `urn:oid:0.9.2342.19200300.100.1.3`
 
+## VCR Mode (LEARN Video Conferencing Integration)
+
+For LEARN Video Conferencing services compatibility, enable VCR Mode to automatically request all required attributes:
+
+```env
+# In backend/.env
+VCR_MODE=true
+```
+
+This automatically sets the complete VCR attribute list: `cn,uid,mail,sn,givenName,eduPersonAffiliation,eduPersonEntitlement,eduPersonPrincipalName,eduPersonScopedAffiliation,eduPersonOrgUnitDN`
+
+### Attribute Release Comparison
+
+Based on IdP audit logs, here's what different services receive:
+
+**ZOOM Service** (`https://proxy.liaf.ac.lk/Saml2/proxy_saml2_backend.xml`):
+
+- ✅ **11 attributes**: `eduPersonEntitlement,commonName,uid,eduPersonOrgUnitDN,eduPersonScopedAffiliation,eduPersonAffiliation,surname,givenName,mobile,eduPersonPrincipalName,email`
+
+**Your Service** (before IdP configuration):
+
+- ❌ **Only 3 attributes**: `eduPersonScopedAffiliation,eduPersonPrincipalName,email`
+- ❌ **Missing**: `eduPersonEntitlement,commonName,uid,eduPersonOrgUnitDN,eduPersonAffiliation,surname,givenName,mobile`
+
+### Required IdP Configuration
+
+Your IdP administrator must add your service to the attribute release policy. Send them your metadata and request the following configuration:
+
+#### 1. Add to `/opt/shibboleth-idp/conf/relying-party.xml`:
+
+```xml
+<bean parent="RelyingPartyByName" c:relyingPartyIds="https://undenotable-endermically-beckett.ngrok-free.dev/metadata">
+    <property name="profileConfigurations">
+        <list>
+            <bean parent="SAML2.SSO" p:encryptAssertions="false" p:postAuthenticationFlows="attribute-release" />
+            <ref bean="SAML2.Logout" />
+            <ref bean="SAML2.AttributeQuery" />
+            <ref bean="SAML2.ArtifactResolution" />
+            <ref bean="Liberty.SSOS" />
+        </list>
+    </property>
+</bean>
+```
+
+#### 2. Add to `/opt/shibboleth-idp/conf/attribute-filter.xml`:
+
+```xml
+<AttributeFilterPolicy id="releaseToYourService">
+    <PolicyRequirementRule xsi:type="Requester" value="https://undenotable-endermically-beckett.ngrok-free.dev/metadata" />
+
+    <!-- Release VCR required attributes -->
+    <AttributeRule attributeID="eduPersonPrincipalName">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonScopedAffiliation">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonAffiliation">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonEntitlement">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonOrgUnitDN">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="mail">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="uid">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="cn">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="sn">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="givenName">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="mobile">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+</AttributeFilterPolicy>
+```
+
+#### 3. Restart IdP Service:
+
+```bash
+# For Shibboleth v3.x.x with Tomcat
+service tomcat8 restart
+
+# For Shibboleth v4+ with Jetty
+service jetty restart
+```
+
+After these changes, your service should receive all 11 attributes like ZOOM does.
+
 ## Prerequisites
 
 - **Node.js v18+**
@@ -233,31 +332,66 @@ sudo chmod 640 /opt/shibboleth-idp/metadata/app-sp.xml
 3. Add relying party in `conf/relying-party.xml`:
 
 ```xml
-<RelyingParty id="https://YOUR-SUBDOMAIN.ngrok-free.dev/metadata" provider="SAML2">
-    <ProfileConfiguration xsi:type="saml:SAML2SSOProfile" includeAttributeStatement="true"/>
-</RelyingParty>
+<bean parent="RelyingPartyByName" c:relyingPartyIds="https://undenotable-endermically-beckett.ngrok-free.dev/metadata">
+    <property name="profileConfigurations">
+        <list>
+            <bean parent="SAML2.SSO" p:encryptAssertions="false" p:postAuthenticationFlows="attribute-release" />
+            <ref bean="SAML2.Logout" />
+            <ref bean="SAML2.AttributeQuery" />
+            <ref bean="SAML2.ArtifactResolution" />
+            <ref bean="Liberty.SSOS" />
+        </list>
+    </property>
+</bean>
 ```
 
 4. Attribute release in `conf/attribute-filter.xml`:
 
 ```xml
-<AttributeFilterPolicy id="AppSPRelease">
-    <PolicyRequirementRule xsi:type="basic:AttributeRequesterString" value="https://YOUR-SUBDOMAIN.ngrok-free.dev/metadata"/>
-    <AttributeRule attributeID="sn"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
-    <AttributeRule attributeID="givenName"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
-    <AttributeRule attributeID="uid"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
-    <AttributeRule attributeID="mail"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
-    <AttributeRule attributeID="eduPersonPrincipalName"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
-    <AttributeRule attributeID="eduPersonAffiliation"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
-    <AttributeRule attributeID="eduPersonOrgUnitDN"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
-    <AttributeRule attributeID="mobile"><PermitValueRule xsi:type="basic:ANY"/></AttributeRule>
+<AttributeFilterPolicy id="releaseToYourService">
+    <PolicyRequirementRule xsi:type="Requester" value="https://undenotable-endermically-beckett.ngrok-free.dev/metadata" />
+    
+    <!-- Release VCR required attributes -->
+    <AttributeRule attributeID="eduPersonPrincipalName">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonScopedAffiliation">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonAffiliation">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonEntitlement">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="eduPersonOrgUnitDN">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="mail">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="uid">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="cn">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="sn">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="givenName">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
+    <AttributeRule attributeID="mobile">
+        <PermitValueRule xsi:type="ANY" />
+    </AttributeRule>
 </AttributeFilterPolicy>
 ```
 
 5. Reload metadata service or restart IdP:
 
 ```bash
-/opt/shibboleth-idp/bin/reload-service.sh -id shibboleth.MetadataResolverService || sudo systemctl restart tomcat8
+service tomcat8 restart
 ```
 
 ### Test
@@ -405,6 +539,8 @@ Check for these common causes:
 - Audience mismatch: EntityID in metadata differs from IdP relying-party entry
 - Stale Request: Browser reused old SAMLRequest (open fresh/incognito)
 - No attributes: Attribute filter missing or values not in LDAP
+- **VCR attributes missing**: IdP admin hasn't added your service to attribute release policy (see VCR Mode section)
+- **Clock skew errors**: Time difference between SP and IdP servers (automatically handled with 5-minute tolerance)
 
 ### 10. Rotating ngrok URL
 

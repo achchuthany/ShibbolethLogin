@@ -3,13 +3,49 @@ const SamlStrategy = require("passport-saml").Strategy;
 const fs = require("fs");
 const crypto = require("crypto");
 
+// Constants for VCR compliance
+const VCR_REQUIRED_ATTRIBUTES = [
+  "cn",
+  "uid",
+  "mail",
+  "sn",
+  "givenName",
+  "eduPersonAffiliation",
+  "eduPersonEntitlement",
+  "eduPersonPrincipalName",
+  "eduPersonScopedAffiliation",
+  "eduPersonOrgUnitDN",
+  "mobile",
+];
+
+// OID mappings for SAML attributes
+const ATTRIBUTE_OID_MAP = {
+  mail: "urn:oid:0.9.2342.19200300.100.1.3",
+  email: "urn:oid:0.9.2342.19200300.100.1.3",
+  uid: "urn:oid:0.9.2342.19200300.100.1.1",
+  sn: "urn:oid:2.5.4.4",
+  surname: "urn:oid:2.5.4.4",
+  givenName: "urn:oid:2.5.4.42",
+  givenname: "urn:oid:2.5.4.42",
+  displayName: "urn:oid:2.16.840.1.113730.3.1.241",
+  cn: "urn:oid:2.5.4.3",
+  principalName: "urn:oid:1.3.6.1.4.1.5923.1.1.1.6",
+  eduPersonPrincipalName: "urn:oid:1.3.6.1.4.1.5923.1.1.1.6",
+  eduPersonAffiliation: "urn:oid:1.3.6.1.4.1.5923.1.1.1.1",
+  eduPersonOrgUnitDN: "urn:oid:1.3.6.1.4.1.5923.1.1.1.4",
+  eduPersonScopedAffiliation: "urn:oid:1.3.6.1.4.1.5923.1.1.1.9",
+  eduPersonEntitlement: "urn:oid:1.3.6.1.4.1.5923.1.1.1.7",
+  mobile: "urn:oid:0.9.2342.19200300.100.1.41",
+};
+
 class SamlService {
   static initializePassport() {
     // Check if we have required configuration
     if (!process.env.IDP_SSO_URL) {
-      console.warn(
-        "Warning: IDP_SSO_URL not configured. SAML authentication will not work properly."
+      console.error(
+        "[SAML ERROR] IDP_SSO_URL not configured. SAML authentication will not work."
       );
+      return null;
     }
 
     // Default certificate for development - replace with real IdP certificate
@@ -77,7 +113,12 @@ class SamlService {
         try {
           raw = fs.readFileSync(fsPath, "utf8");
         } catch (e) {
-          console.warn("[SAML] Failed reading IDP_CERT_FILE:", e.message);
+          if (process.env.SAML_DEBUG === "true") {
+            console.warn(
+              "[SAML DEBUG] Failed reading IDP_CERT_FILE:",
+              e.message
+            );
+          }
         }
       }
       if (!raw) raw = process.env.IDP_CERT || "";
@@ -149,14 +190,15 @@ class SamlService {
     if (process.env.REQUESTED_ATTRIBUTES) {
       samlOptions.attributeConsumingServiceIndex = 1;
     }
-    // If VCR_MODE enabled and no explicit REQUESTED_ATTRIBUTES provided, set the canonical VCR list
-    if (!process.env.REQUESTED_ATTRIBUTES && process.env.VCR_MODE === "true") {
-      process.env.REQUESTED_ATTRIBUTES =
-        "cn,uid,mail,sn,givenName,eduPersonAffiliation,eduPersonEntitlement,eduPersonPrincipalName,eduPersonScopedAffiliation,eduPersonOrgUnitDN";
+    // VCR_MODE is always enabled - set the canonical VCR attribute list
+    if (!process.env.REQUESTED_ATTRIBUTES) {
+      process.env.REQUESTED_ATTRIBUTES = VCR_REQUIRED_ATTRIBUTES.join(",");
       samlOptions.attributeConsumingServiceIndex = 1;
       if (process.env.SAML_DEBUG === "true") {
         console.log(
-          "[SAML DEBUG] VCR_MODE active: injecting default REQUESTED_ATTRIBUTES list"
+          "[SAML DEBUG] VCR_MODE always active: requesting",
+          VCR_REQUIRED_ATTRIBUTES.length,
+          "attributes"
         );
       }
     }
@@ -166,14 +208,14 @@ class SamlService {
       if (process.env.SAML_SIGN_REQUESTS === "true") {
         samlOptions.privateKey = spKey;
       }
-    } else {
+    } else if (process.env.SAML_DEBUG === "true") {
       console.warn(
-        "[SAML] No SP private key loaded (SP_PRIVATE_KEY or SP_PRIVATE_KEY_FILE)."
+        "[SAML DEBUG] No SP private key loaded - SAML decryption and signing disabled"
       );
     }
-    if (!spCert) {
+    if (!spCert && process.env.SAML_DEBUG === "true") {
       console.warn(
-        "[SAML] No SP certificate loaded (SP_CERT or SP_CERT_FILE). Metadata will have empty KeyDescriptor."
+        "[SAML DEBUG] No SP certificate loaded - metadata KeyDescriptor will be empty"
       );
     }
 
@@ -204,7 +246,13 @@ class SamlService {
     passport.use(
       "saml",
       new SamlStrategy(samlOptions, async (profile, done) => {
-        console.log("[SAML] Received SAML response:", profile);
+        if (process.env.SAML_DEBUG === "true") {
+          console.log(
+            "[SAML DEBUG] Received SAML response with",
+            Object.keys(profile).length,
+            "attributes"
+          );
+        }
         try {
           // Process the SAML response with LEARN-LK specific attributes
           const user = {
@@ -245,7 +293,10 @@ class SamlService {
             orgUnitDN:
               profile.eduPersonOrgUnitDN ||
               profile["urn:oid:1.3.6.1.4.1.5923.1.1.1.4"], // eduPersonOrgUnitDN
-            mobile: profile.mobile || profile.telephoneNumber,
+            mobile:
+              profile.mobile ||
+              profile.telephoneNumber ||
+              profile["urn:oid:0.9.2342.19200300.100.1.41"],
 
             // VCR attributes
             scopedAffiliation:
@@ -334,75 +385,86 @@ class SamlService {
             profile.eduPersonOrgUnitDN,
             profile["urn:oid:1.3.6.1.4.1.5923.1.1.1.4"],
           ]);
+          ensure(user, "mobile", [
+            user.mobile,
+            profile.mobile,
+            profile.telephoneNumber,
+            profile["urn:oid:0.9.2342.19200300.100.1.41"],
+          ]);
 
-          // VCR required attributes enforcement (optional)
-          if (process.env.VCR_MODE === "true") {
-            const required = (
-              process.env.VCR_REQUIRED_ATTRIBUTES ||
-              "cn,uid,mail,sn,givenName,eduPersonAffiliation,eduPersonEntitlement,eduPersonPrincipalName,eduPersonScopedAffiliation"
-            )
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean);
-            const missing = [];
-            const attributePresence = {};
-            required.forEach((attr) => {
-              // Map logical names to user object keys
-              let key = attr;
-              if (attr === "mail" || attr === "email") key = "email";
-              if (attr === "givenName" || attr === "givenname")
-                key = "firstName";
-              if (attr === "sn") key = "lastName";
-              if (attr === "eduPersonPrincipalName") key = "principalName";
-              if (attr === "eduPersonScopedAffiliation")
-                key = "scopedAffiliation";
-              if (attr === "eduPersonAffiliation") key = "affiliation";
-              if (attr === "eduPersonEntitlement") key = "entitlement";
-              if (!user[key]) missing.push(attr);
-              attributePresence[attr] = !!user[key];
-            });
-            user.vcrAttributePresence = attributePresence;
-            user.vcrMissing = missing;
-            user.vcrCompliant = missing.length === 0;
-            if (process.env.SAML_DEBUG === "true") {
-              if (missing.length) {
-                console.warn(
-                  "[SAML DEBUG] VCR required attributes missing:",
-                  missing
-                );
-              } else {
-                console.log("[SAML DEBUG] All VCR required attributes present");
-              }
-            }
-            if (
-              process.env.SAML_ENFORCE_REQUIRED === "true" &&
-              missing.length
-            ) {
-              return done(
-                new Error(
-                  "Missing required VCR attributes: " + missing.join(", ")
-                ),
-                null
+          // VCR required attributes enforcement (always enabled)
+          const required = process.env.VCR_REQUIRED_ATTRIBUTES
+            ? process.env.VCR_REQUIRED_ATTRIBUTES.split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : VCR_REQUIRED_ATTRIBUTES;
+          const missing = [];
+          const attributePresence = {};
+          required.forEach((attr) => {
+            // Map logical names to user object keys
+            let key = attr;
+            if (attr === "mail" || attr === "email") key = "email";
+            if (attr === "givenName" || attr === "givenname") key = "firstName";
+            if (attr === "sn") key = "lastName";
+            if (attr === "eduPersonPrincipalName") key = "principalName";
+            if (attr === "eduPersonScopedAffiliation")
+              key = "scopedAffiliation";
+            if (attr === "eduPersonAffiliation") key = "affiliation";
+            if (attr === "eduPersonEntitlement") key = "entitlement";
+            if (attr === "eduPersonOrgUnitDN") key = "orgUnitDN";
+            if (!user[key]) missing.push(attr);
+            attributePresence[attr] = !!user[key];
+          });
+          user.vcrAttributePresence = attributePresence;
+          user.vcrMissing = missing;
+          user.vcrCompliant = missing.length === 0;
+          if (process.env.SAML_DEBUG === "true") {
+            if (missing.length) {
+              console.warn(
+                "[SAML DEBUG] VCR required attributes missing:",
+                missing
               );
+            } else {
+              console.log("[SAML DEBUG] All VCR required attributes present");
             }
           }
+          if (process.env.SAML_ENFORCE_REQUIRED === "true" && missing.length) {
+            return done(
+              new Error(
+                "Missing required VCR attributes: " + missing.join(", ")
+              ),
+              null
+            );
+          }
 
-          console.log("SAML Profile received from LEARN-LK IdP v3.3.2:", {
-            nameID: user.id,
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            affiliation: user.affiliation,
-            organization: user.homeOrganization,
-            mobile: user.mobile,
-            totalAttributes: Object.keys(profile).length,
-          });
-
-          console.log("Processed user object:", { user });
+          if (process.env.SAML_DEBUG === "true") {
+            console.log("[SAML DEBUG] Profile processed successfully:", {
+              nameID: user.id?.substring(0, 20) + "...",
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              affiliation: user.affiliation,
+              mobile: user.mobile,
+              vcrCompliant: user.vcrCompliant,
+              totalAttributes: Object.keys(profile).length,
+            });
+          } else {
+            console.log("[SAML] User authenticated successfully:", {
+              uid: user.uid,
+              email: user.email,
+              vcrCompliant: user.vcrCompliant,
+            });
+          }
 
           return done(null, user);
         } catch (error) {
-          console.error("Error processing SAML profile:", error);
+          console.error(
+            "[SAML ERROR] Failed to process SAML profile:",
+            error.message
+          );
+          if (process.env.SAML_DEBUG === "true") {
+            console.error("[SAML DEBUG] Full error stack:", error);
+          }
           return done(error, null);
         }
       })
@@ -483,10 +545,12 @@ class SamlService {
         try {
           raw = fs.readFileSync(fsPath, "utf8");
         } catch (e) {
-          console.warn(
-            "[SAML] Failed reading IDP_CERT_FILE (metadata):",
-            e.message
-          );
+          if (process.env.SAML_DEBUG === "true") {
+            console.warn(
+              "[SAML DEBUG] Failed reading IDP_CERT_FILE (metadata):",
+              e.message
+            );
+          }
         }
       }
       if (!raw) raw = process.env.IDP_CERT || "";
@@ -572,10 +636,16 @@ class SamlService {
       }
     }
 
-    // Log once for debugging mismatches
-    if (process.env.NODE_ENV === "development") {
-      console.log("[Metadata] Using EntityID:", samlOptions.issuer);
-      console.log("[Metadata] ACS URL:", samlOptions.callbackUrl);
+    // Log metadata configuration for debugging
+    if (process.env.SAML_DEBUG === "true") {
+      console.log(
+        "[SAML DEBUG] Metadata generation - EntityID:",
+        samlOptions.issuer
+      );
+      console.log(
+        "[SAML DEBUG] Metadata generation - ACS URL:",
+        samlOptions.callbackUrl
+      );
     }
 
     const strategy = new SamlStrategy(samlOptions, () => {});
@@ -585,18 +655,21 @@ class SamlService {
       metadata = strategy.generateServiceProviderMetadata(spCert, spCert);
     } else {
       metadata = strategy.generateServiceProviderMetadata();
-      console.warn(
-        "[Metadata] SP_CERT absent -> empty <ds:X509Certificate/>; IdP encryption will fail."
-      );
+      if (process.env.SAML_DEBUG === "true") {
+        console.warn(
+          "[SAML DEBUG] SP_CERT absent - metadata will have empty KeyDescriptor, IdP encryption may fail"
+        );
+      }
     }
 
-    // Apply VCR_MODE logic if enabled and no explicit REQUESTED_ATTRIBUTES
-    if (!process.env.REQUESTED_ATTRIBUTES && process.env.VCR_MODE === "true") {
-      process.env.REQUESTED_ATTRIBUTES =
-        "cn,uid,mail,sn,givenName,eduPersonAffiliation,eduPersonEntitlement,eduPersonPrincipalName,eduPersonScopedAffiliation,eduPersonOrgUnitDN";
+    // VCR_MODE always active - apply if no explicit REQUESTED_ATTRIBUTES
+    if (!process.env.REQUESTED_ATTRIBUTES) {
+      process.env.REQUESTED_ATTRIBUTES = VCR_REQUIRED_ATTRIBUTES.join(",");
       if (process.env.SAML_DEBUG === "true") {
         console.log(
-          "[SAML DEBUG] VCR_MODE active in metadata generation: injecting default REQUESTED_ATTRIBUTES list"
+          "[SAML DEBUG] Metadata generation: VCR_MODE active, requesting",
+          VCR_REQUIRED_ATTRIBUTES.length,
+          "attributes"
         );
       }
     }
@@ -609,31 +682,12 @@ class SamlService {
         .map((a) => a.trim())
         .filter(Boolean);
       if (rawList.length) {
-        // Map friendly / alias names to canonical + OID variants.
-        // Only add an OID variant if it's not already explicitly listed.
-        const attrMap = {
-          mail: "urn:oid:0.9.2342.19200300.100.1.3",
-          email: "urn:oid:0.9.2342.19200300.100.1.3",
-          uid: "urn:oid:0.9.2342.19200300.100.1.1",
-          sn: "urn:oid:2.5.4.4",
-          surname: "urn:oid:2.5.4.4",
-          givenName: "urn:oid:2.5.4.42",
-          givenname: "urn:oid:2.5.4.42",
-          displayName: "urn:oid:2.16.840.1.113730.3.1.241",
-          principalName: "urn:oid:1.3.6.1.4.1.5923.1.1.1.6", // alias to eduPersonPrincipalName
-          eduPersonPrincipalName: "urn:oid:1.3.6.1.4.1.5923.1.1.1.6",
-          eduPersonAffiliation: "urn:oid:1.3.6.1.4.1.5923.1.1.1.1",
-          eduPersonOrgUnitDN: "urn:oid:1.3.6.1.4.1.5923.1.1.1.4",
-          eduPersonScopedAffiliation: "urn:oid:1.3.6.1.4.1.5923.1.1.1.9",
-          eduPersonEntitlement: "urn:oid:1.3.6.1.4.1.5923.1.1.1.7",
-          mobile: "urn:oid:0.9.2342.19200300.100.1.41", // LDAP mobile
-          cn: "urn:oid:2.5.4.3",
-        };
+        // Use predefined OID mappings for consistency
         const basicRequested = new Set();
         const oidRequested = new Set();
         rawList.forEach((n) => {
           basicRequested.add(n);
-          const oid = attrMap[n];
+          const oid = ATTRIBUTE_OID_MAP[n];
           if (oid) oidRequested.add(oid);
           // If an alias maps to eduPersonPrincipalName ensure canonical short name too
           if (n === "principalName")

@@ -26,7 +26,12 @@ app.set("trust proxy", [
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: (origin, callback) => {
+      // Always allow the requesting origin (for testing)
+      // This ensures we never send '*' when credentials are included
+      console.log(`CORS request from origin: ${origin}`);
+      callback(null, origin || "http://localhost:3000");
+    },
     credentials: true,
   })
 );
