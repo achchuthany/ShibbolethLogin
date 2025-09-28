@@ -62,21 +62,67 @@ const Dashboard = () => {
 
           <div className="info-grid">
             <div className="info-card">
-              <h3>User Information</h3>
+              <h3>Personal Information</h3>
               <p>
-                <strong>Name:</strong>{" "}
-                {user?.displayName || `${user?.firstName} ${user?.lastName}`}
+                <strong>Display Name:</strong>{" "}
+                {user?.displayName ||
+                  `${user?.firstName} ${user?.lastName}` ||
+                  "Not provided"}
+              </p>
+              <p>
+                <strong>First Name:</strong> {user?.firstName || "Not provided"}
+              </p>
+              <p>
+                <strong>Last Name:</strong> {user?.lastName || "Not provided"}
               </p>
               <p>
                 <strong>Email:</strong> {user?.email || "Not provided"}
               </p>
               <p>
-                <strong>User ID:</strong> {user?.id}
+                <strong>Mobile:</strong> {user?.mobile || "Not provided"}
               </p>
             </div>
 
             <div className="info-card">
-              <h3>Session Information</h3>
+              <h3>Identity Information</h3>
+              <p>
+                <strong>User ID (uid):</strong> {user?.uid || "Not provided"}
+              </p>
+              <p>
+                <strong>Principal Name:</strong>{" "}
+                {user?.principalName || "Not provided"}
+              </p>
+              <p>
+                <strong>Name ID:</strong> {user?.id || "Not provided"}
+              </p>
+              <p>
+                <strong>Affiliation:</strong>{" "}
+                {user?.affiliation || "Not provided"}
+              </p>
+            </div>
+
+            <div className="info-card">
+              <h3>Organizational Information</h3>
+              <p>
+                <strong>Home Organization:</strong>{" "}
+                {user?.homeOrganization || "Not provided"}
+              </p>
+              <p>
+                <strong>Department:</strong>{" "}
+                {user?.department || "Not provided"}
+              </p>
+              <p>
+                <strong>Org Unit DN:</strong>{" "}
+                {user?.orgUnitDN || "Not provided"}
+              </p>
+              <p>
+                <strong>Organization Type:</strong>{" "}
+                {user?.homeOrganizationType || "Not provided"}
+              </p>
+            </div>
+
+            <div className="info-card">
+              <h3>Session & System Information</h3>
               <p>
                 <strong>Last Login:</strong>{" "}
                 {dashboardData?.data?.lastLogin
@@ -84,7 +130,10 @@ const Dashboard = () => {
                   : "N/A"}
               </p>
               <p>
-                <strong>Authentication Method:</strong> Shibboleth SAML
+                <strong>IdP Version:</strong> Shibboleth v3.3.2
+              </p>
+              <p>
+                <strong>Protocol:</strong> SAML 2.0
               </p>
               <p>
                 <strong>Session Status:</strong> Active
@@ -92,28 +141,44 @@ const Dashboard = () => {
             </div>
 
             <div className="info-card">
-              <h3>Application Features</h3>
-              <p>✅ Single Sign-On (SSO)</p>
-              <p>✅ JWT Token Authentication</p>
-              <p>✅ Automatic Token Refresh</p>
-              <p>✅ Secure Session Management</p>
-              <p>✅ SAML-based Authentication</p>
+              <h3>LEARN-LK Attributes</h3>
+              <p>
+                <strong>Scoped Affiliation:</strong>{" "}
+                {user?.scopedAffiliation || "Not provided"}
+              </p>
+              <p>
+                <strong>Entitlement:</strong>{" "}
+                {user?.entitlement || "Not provided"}
+              </p>
+              <p>
+                <strong>Total Attributes:</strong>{" "}
+                {user?.attributes ? Object.keys(user.attributes).length : 0}
+              </p>
+              <p style={{ fontSize: "0.9em", color: "#666" }}>
+                Zoom-compatible attributes:{" "}
+                {
+                  [
+                    user?.lastName,
+                    user?.email,
+                    user?.uid,
+                    user?.firstName,
+                    user?.principalName,
+                    user?.affiliation,
+                    user?.orgUnitDN,
+                    user?.mobile,
+                  ].filter(Boolean).length
+                }{" "}
+                / 8
+              </p>
             </div>
 
             <div className="info-card">
-              <h3>Security Information</h3>
-              <p>
-                <strong>IdP Provider:</strong> jfn.ac.lk
-              </p>
-              <p>
-                <strong>Protocol:</strong> SAML 2.0
-              </p>
-              <p>
-                <strong>Token Type:</strong> JWT (HTTP-Only Cookies)
-              </p>
-              <p>
-                <strong>Session Timeout:</strong> Configurable
-              </p>
+              <h3>Security Features</h3>
+              <p>✅ Single Sign-On (SSO)</p>
+              <p>✅ JWT Token Authentication</p>
+              <p>✅ HTTP/HTTPS Support</p>
+              <p>✅ Shibboleth v3.3.2 Compatible</p>
+              <p>✅ LEARN-LK Federation Ready</p>
             </div>
           </div>
 

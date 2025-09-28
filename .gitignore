@@ -76,3 +76,6 @@ health-monitor.sh
 
 # PM2 ecosystem files (keep template)
 ecosystem.config.js.production
+
+#SAML
+saml-dumps/

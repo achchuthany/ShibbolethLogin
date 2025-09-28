@@ -63,6 +63,43 @@ router.post(
   (req, res, next) => {
     try {
       initializeSAML();
+      // Debug: capture raw SAMLResponse (base64) early for troubleshooting
+      if (
+        process.env.SAML_DEBUG === "true" &&
+        req.body &&
+        req.body.SAMLResponse
+      ) {
+        const b64 = req.body.SAMLResponse;
+        console.log("[SAML DEBUG] Raw SAMLResponse base64 length:", b64.length);
+        try {
+          const xml = Buffer.from(b64, "base64").toString("utf8");
+          console.log(
+            "[SAML DEBUG] Decoded SAMLResponse first 600 chars:\n",
+            xml.substring(0, 600)
+          );
+          // Persist full XML for offline inspection (rotating by timestamp)
+          try {
+            const ts = new Date().toISOString().replace(/[:.]/g, "-");
+            const path = require("path");
+            const fs = require("fs");
+            const outDir = path.join(process.cwd(), "saml-dumps");
+            if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+            const filePath = path.join(outDir, `response-${ts}.xml`);
+            fs.writeFileSync(filePath, xml, "utf8");
+            console.log("[SAML DEBUG] Full SAMLResponse saved to", filePath);
+          } catch (fileErr) {
+            console.warn(
+              "[SAML DEBUG] Failed writing SAMLResponse file:",
+              fileErr.message
+            );
+          }
+        } catch (e) {
+          console.warn(
+            "[SAML DEBUG] Failed to decode SAMLResponse:",
+            e.message
+          );
+        }
+      }
       passport.authenticate("saml", { session: false })(req, res, next);
     } catch (error) {
       res.status(500).json({
@@ -105,6 +142,16 @@ router.post(
       res.redirect(`${frontendUrl}/dashboard?login=success`);
     } catch (error) {
       console.error("Callback error:", error);
+      if (
+        process.env.SAML_DEBUG === "true" &&
+        req.body &&
+        req.body.SAMLResponse
+      ) {
+        console.log(
+          "[SAML DEBUG] Failure SAMLResponse (base64 length):",
+          req.body.SAMLResponse.length
+        );
+      }
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
       res.redirect(`${frontendUrl}/login?error=auth_failed`);
     }
