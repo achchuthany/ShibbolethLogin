@@ -72,13 +72,25 @@ class SamlService {
     const normalizeCert = (raw) => {
       if (!raw) return null;
       let txt = raw.replace(/\\n/g, "\n").trim();
+
       // If only header present (bad multi-line env parsing) treat as empty
       if (/^-----BEGIN CERTIFICATE-----$/.test(txt)) return null;
-      // If no BEGIN line assume it's just base64 body
+
+      // If no BEGIN line assume it's just base64 body (Vercel environment variable format)
       if (!txt.includes("BEGIN CERTIFICATE")) {
-        txt = `-----BEGIN CERTIFICATE-----\n${txt.replace(
-          /\s+/g,
-          ""
+        // Remove any whitespace and format as proper PEM
+        const base64Data = txt.replace(/\s+/g, "");
+
+        // Validate base64 format
+        if (!/^[A-Za-z0-9+/]+=*$/.test(base64Data)) {
+          console.error("[SAML ERROR] Invalid base64 certificate data");
+          return null;
+        }
+
+        // Split into 64-character lines for proper PEM format
+        const pemLines = base64Data.match(/.{1,64}/g) || [];
+        txt = `-----BEGIN CERTIFICATE-----\n${pemLines.join(
+          "\n"
         )}\n-----END CERTIFICATE-----`;
       }
       return txt;
@@ -86,11 +98,23 @@ class SamlService {
     const normalizeKey = (raw) => {
       if (!raw) return null;
       let txt = raw.replace(/\\n/g, "\n").trim();
+
       if (/^-----BEGIN (?:RSA )?PRIVATE KEY-----$/.test(txt)) return null;
+
       if (!txt.includes("BEGIN")) {
-        txt = `-----BEGIN PRIVATE KEY-----\n${txt.replace(
-          /\s+/g,
-          ""
+        // Remove any whitespace and format as proper PEM
+        const base64Data = txt.replace(/\s+/g, "");
+
+        // Validate base64 format
+        if (!/^[A-Za-z0-9+/]+=*$/.test(base64Data)) {
+          console.error("[SAML ERROR] Invalid base64 private key data");
+          return null;
+        }
+
+        // Split into 64-character lines for proper PEM format
+        const pemLines = base64Data.match(/.{1,64}/g) || [];
+        txt = `-----BEGIN PRIVATE KEY-----\n${pemLines.join(
+          "\n"
         )}\n-----END PRIVATE KEY-----`;
       }
       return txt;
@@ -106,7 +130,10 @@ class SamlService {
     );
 
     // Debug certificate loading for Vercel deployment
-    if (process.env.SAML_DEBUG === "true" && process.env.NODE_ENV === "production") {
+    if (
+      process.env.SAML_DEBUG === "true" &&
+      process.env.NODE_ENV === "production"
+    ) {
       console.log("[SAML DEBUG] Vercel Environment Check:");
       console.log("  SP_PRIVATE_KEY_FILE:", !!process.env.SP_PRIVATE_KEY_FILE);
       console.log("  SP_PRIVATE_KEY env var:", !!process.env.SP_PRIVATE_KEY);
@@ -139,20 +166,49 @@ class SamlService {
       }
       if (!raw) raw = process.env.IDP_CERT || "";
       if (!raw) return defaultCert; // fallback dev stub
+
+      // Split by || separator for multiple certificates
       const parts = raw
         .split(/\|\||\n{2,}/)
         .map((p) => p.trim())
         .filter(Boolean);
-      const norm = parts.map((p) => {
-        let txt = p.replace(/\r/g, "").trim();
-        if (txt.includes("BEGIN CERTIFICATE")) return txt;
-        txt = txt.replace(/\s+/g, "");
-        return (
-          "-----BEGIN CERTIFICATE-----\n" +
-          txt.match(/.{1,64}/g).join("\n") +
-          "\n-----END CERTIFICATE-----"
-        );
-      });
+
+      const norm = parts
+        .map((p) => {
+          let txt = p.replace(/\r/g, "").trim();
+
+          // If already in PEM format, return as-is
+          if (txt.includes("BEGIN CERTIFICATE")) return txt;
+
+          // Remove any whitespace from base64 data
+          txt = txt.replace(/\s+/g, "");
+
+          // Validate base64 format before processing
+          if (!/^[A-Za-z0-9+/]+=*$/.test(txt)) {
+            console.error("[SAML ERROR] Invalid base64 certificate data");
+            return null;
+          }
+
+          // Split into 64-character lines for proper PEM format
+          const lines = txt.match(/.{1,64}/g) || [];
+          return (
+            "-----BEGIN CERTIFICATE-----\n" +
+            lines.join("\n") +
+            "\n-----END CERTIFICATE-----"
+          );
+        })
+        .filter(Boolean); // Remove any null entries
+
+      if (process.env.SAML_DEBUG === "true") {
+        console.log(`[SAML DEBUG] Loaded ${norm.length} IdP certificate(s)`);
+        norm.forEach((cert, i) => {
+          console.log(
+            `[SAML DEBUG] Cert ${i + 1} fingerprint:`,
+            computeFingerprint(cert)
+          );
+        });
+      }
+
       return norm.length === 1 ? norm[0] : norm;
     };
     const idpCertLoaded = loadIdpCerts();
@@ -229,15 +285,22 @@ class SamlService {
           console.log("[SAML DEBUG] SP private key loaded successfully");
         }
       } catch (error) {
-        console.error("[SAML ERROR] Failed to process SP private key:", error.message);
+        console.error(
+          "[SAML ERROR] Failed to process SP private key:",
+          error.message
+        );
         if (process.env.SAML_DEBUG === "true") {
           console.error("[SAML DEBUG] Private key error:", error);
         }
       }
     } else {
-      console.warn("[SAML WARN] No SP private key loaded - SAML decryption and signing disabled");
+      console.warn(
+        "[SAML WARN] No SP private key loaded - SAML decryption and signing disabled"
+      );
       if (process.env.NODE_ENV === "production") {
-        console.error("[SAML ERROR] Missing SP_PRIVATE_KEY in production! This will cause authentication failures.");
+        console.error(
+          "[SAML ERROR] Missing SP_PRIVATE_KEY in production! This will cause authentication failures."
+        );
       }
     }
     if (!spCert && process.env.SAML_DEBUG === "true") {
@@ -537,9 +600,12 @@ class SamlService {
       let txt = raw.replace(/\\n/g, "\n").trim();
       if (/^-----BEGIN CERTIFICATE-----$/.test(txt)) return null;
       if (!txt.includes("BEGIN CERTIFICATE")) {
-        txt = `-----BEGIN CERTIFICATE-----\n${txt.replace(
-          /\s+/g,
-          ""
+        // Remove any whitespace and format as proper PEM
+        const base64Data = txt.replace(/\s+/g, "");
+        // Split into 64-character lines for proper PEM format
+        const pemLines = base64Data.match(/.{1,64}/g) || [];
+        txt = `-----BEGIN CERTIFICATE-----\n${pemLines.join(
+          "\n"
         )}\n-----END CERTIFICATE-----`;
       }
       return txt;
@@ -549,9 +615,12 @@ class SamlService {
       let txt = raw.replace(/\\n/g, "\n").trim();
       if (/^-----BEGIN (?:RSA )?PRIVATE KEY-----$/.test(txt)) return null;
       if (!txt.includes("BEGIN")) {
-        txt = `-----BEGIN PRIVATE KEY-----\n${txt.replace(
-          /\s+/g,
-          ""
+        // Remove any whitespace and format as proper PEM
+        const base64Data = txt.replace(/\s+/g, "");
+        // Split into 64-character lines for proper PEM format
+        const pemLines = base64Data.match(/.{1,64}/g) || [];
+        txt = `-----BEGIN PRIVATE KEY-----\n${pemLines.join(
+          "\n"
         )}\n-----END PRIVATE KEY-----`;
       }
       return txt;
