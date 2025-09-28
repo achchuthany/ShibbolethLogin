@@ -105,6 +105,22 @@ class SamlService {
         null
     );
 
+    // Debug certificate loading for Vercel deployment
+    if (process.env.SAML_DEBUG === "true" && process.env.NODE_ENV === "production") {
+      console.log("[SAML DEBUG] Vercel Environment Check:");
+      console.log("  SP_PRIVATE_KEY_FILE:", !!process.env.SP_PRIVATE_KEY_FILE);
+      console.log("  SP_PRIVATE_KEY env var:", !!process.env.SP_PRIVATE_KEY);
+      console.log("  SP_CERT env var:", !!process.env.SP_CERT);
+      console.log("  Normalized spKey:", !!spKey);
+      console.log("  Normalized spCert:", !!spCert);
+      if (spKey) {
+        console.log("  spKey starts with:", spKey.substring(0, 30));
+      }
+      if (spCert) {
+        console.log("  spCert starts with:", spCert.substring(0, 30));
+      }
+    }
+
     // Load IdP signing cert(s) (support file + multi-cert separation)
     const loadIdpCerts = () => {
       const fsPath = process.env.IDP_CERT_FILE;
@@ -204,14 +220,25 @@ class SamlService {
     }
 
     if (spKey) {
-      samlOptions.decryptionPvk = spKey;
-      if (process.env.SAML_SIGN_REQUESTS === "true") {
-        samlOptions.privateKey = spKey;
+      try {
+        samlOptions.decryptionPvk = spKey;
+        if (process.env.SAML_SIGN_REQUESTS === "true") {
+          samlOptions.privateKey = spKey;
+        }
+        if (process.env.SAML_DEBUG === "true") {
+          console.log("[SAML DEBUG] SP private key loaded successfully");
+        }
+      } catch (error) {
+        console.error("[SAML ERROR] Failed to process SP private key:", error.message);
+        if (process.env.SAML_DEBUG === "true") {
+          console.error("[SAML DEBUG] Private key error:", error);
+        }
       }
-    } else if (process.env.SAML_DEBUG === "true") {
-      console.warn(
-        "[SAML DEBUG] No SP private key loaded - SAML decryption and signing disabled"
-      );
+    } else {
+      console.warn("[SAML WARN] No SP private key loaded - SAML decryption and signing disabled");
+      if (process.env.NODE_ENV === "production") {
+        console.error("[SAML ERROR] Missing SP_PRIVATE_KEY in production! This will cause authentication failures.");
+      }
     }
     if (!spCert && process.env.SAML_DEBUG === "true") {
       console.warn(
