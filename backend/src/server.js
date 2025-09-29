@@ -77,6 +77,21 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Server time endpoint
+app.get("/api/time", (req, res) => {
+  const now = new Date();
+  res.json({
+    serverTime: now.toISOString(),
+    timestamp: now.getTime(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    formatted: {
+      utc: now.toUTCString(),
+      local: now.toLocaleString(),
+      iso: now.toISOString(),
+    }
+  });
+});
+
 // Error handling middleware
 app.use(errorHandler);
 

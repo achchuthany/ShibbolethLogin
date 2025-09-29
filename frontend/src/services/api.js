@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "http://localhost:5000/api",
+  baseURL: process.env.REACT_APP_API_URL || "http://localhost:5001/api",
   withCredentials: true, // Important for cookies
   timeout: 10000,
 });
@@ -58,6 +58,12 @@ export const authAPI = {
 
   // Get login URL (redirects to SAML IdP)
   getLoginUrl: () => `${api.defaults.baseURL}/auth/login`,
+};
+
+// General API functions
+export const generalAPI = {
+  // Get server time
+  getServerTime: () => api.get("/time"),
 };
 
 // Protected API functions

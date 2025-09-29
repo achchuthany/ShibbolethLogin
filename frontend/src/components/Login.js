@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import ServerTime from "./ServerTime";
 
 const Login = () => {
   const { authenticated, login } = useAuth();
@@ -53,6 +54,10 @@ const Login = () => {
           <br />
           After successful authentication, you'll be brought back here.
         </p>
+        <div className="card" style={{ marginBottom: "20px" }}>
+            <h3 style={{ marginBottom: "15px", color: "#333" }}>Server Time Information</h3>
+            <ServerTime className="server-time-display" />
+          </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "./Navbar";
+import ServerTime from "./ServerTime";
 import { useAuth } from "../contexts/AuthContext";
 import { protectedAPI } from "../services/api";
 
@@ -49,9 +50,20 @@ const Dashboard = () => {
       <Navbar />
       <div className="container">
         <div className="dashboard">
-          {message && <div className="success">{message}</div>}
+          {message && (
+            <div className="success-message" style={{ marginBottom: "20px" }}>
+              {message}
+            </div>
+          )}
 
-          <div className="welcome-card">
+          {/* Server Time Display */}
+          <div className="card" style={{ marginBottom: "20px" }}>
+            <h3 style={{ marginBottom: "15px", color: "#333" }}>Server Time Information</h3>
+            <ServerTime className="server-time-display" />
+          </div>
+
+          <div className="user-info card">
+            <div className="welcome-card">
             <h1 className="welcome-title">
               Welcome, {user?.displayName || user?.firstName || "User"}!
             </h1>
@@ -180,6 +192,7 @@ const Dashboard = () => {
               <p>✅ Shibboleth v3.3.2 Compatible</p>
               <p>✅ LEARN-LK Federation Ready</p>
             </div>
+          </div>
           </div>
 
           <div
