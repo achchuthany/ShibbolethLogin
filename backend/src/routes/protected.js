@@ -10,10 +10,13 @@ router.get("/profile", verifyToken, (req, res) => {
       success: true,
       user: {
         id: req.user.id,
+        uid: req.user.uid,
         email: req.user.email,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
         displayName: req.user.displayName,
+        affiliation: req.user.affiliation,
+        mobile: req.user.mobile,
         sessionId: req.user.sessionId,
       },
     });
@@ -33,8 +36,11 @@ router.get("/dashboard", verifyToken, (req, res) => {
       success: true,
       message: "Welcome to the dashboard!",
       user: {
+        uid: req.user.uid,
         displayName: req.user.displayName || "User",
         email: req.user.email,
+        affiliation: req.user.affiliation,
+        mobile: req.user.mobile,
       },
       data: {
         lastLogin: new Date().toISOString(),

@@ -124,10 +124,13 @@ router.post(
       // Generate JWT tokens
       const tokenPayload = {
         id: user.id,
+        uid: user.uid,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         displayName: user.displayName,
+        affiliation: user.affiliation,
+        mobile: user.mobile,
         sessionId: uuidv4(),
       };
 
@@ -172,10 +175,13 @@ router.get("/status", (req, res) => {
       authenticated: true,
       user: {
         id: decoded.id,
+        uid: decoded.uid,
         email: decoded.email,
         firstName: decoded.firstName,
         lastName: decoded.lastName,
         displayName: decoded.displayName,
+        affiliation: decoded.affiliation,
+        mobile: decoded.mobile,
       },
     });
   } catch (error) {
@@ -191,10 +197,13 @@ router.post("/refresh", verifyRefreshToken, (req, res) => {
     // Generate new tokens
     const tokenPayload = {
       id: user.id,
+      uid: user.uid,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       displayName: user.displayName,
+      affiliation: user.affiliation,
+      mobile: user.mobile,
       sessionId: uuidv4(),
     };
 
