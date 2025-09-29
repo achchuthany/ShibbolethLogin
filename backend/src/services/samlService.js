@@ -127,6 +127,25 @@ class SamlService {
       }
     }
 
+    // Helper function to compute certificate fingerprint
+    const computeFingerprint = (pem) => {
+      try {
+        const b64 = pem
+          .replace(/-----.*CERTIFICATE-----/g, "")
+          .replace(/\s+/g, "");
+        const der = Buffer.from(b64, "base64");
+        return crypto
+          .createHash("sha1")
+          .update(der)
+          .digest("hex")
+          .match(/.{2}/g)
+          .join(":")
+          .toUpperCase();
+      } catch {
+        return "ERROR";
+      }
+    };
+
     // Load IdP signing cert(s) (support file + multi-cert separation)
     const loadIdpCerts = () => {
       const fsPath = process.env.IDP_CERT_FILE;
@@ -191,24 +210,6 @@ class SamlService {
       return norm.length === 1 ? norm[0] : norm;
     };
     const idpCertLoaded = loadIdpCerts();
-
-    const computeFingerprint = (pem) => {
-      try {
-        const b64 = pem
-          .replace(/-----.*CERTIFICATE-----/g, "")
-          .replace(/\s+/g, "");
-        const der = Buffer.from(b64, "base64");
-        return crypto
-          .createHash("sha1")
-          .update(der)
-          .digest("hex")
-          .match(/.{2}/g)
-          .join(":")
-          .toUpperCase();
-      } catch {
-        return "ERROR";
-      }
-    };
 
     const samlOptions = {
       entryPoint:
@@ -647,23 +648,6 @@ class SamlService {
       return norm.length === 1 ? norm[0] : norm;
     };
     const idpCertLoaded = loadIdpCerts();
-    const computeFingerprint = (pem) => {
-      try {
-        const b64 = pem
-          .replace(/-----.*CERTIFICATE-----/g, "")
-          .replace(/\s+/g, "");
-        const der = Buffer.from(b64, "base64");
-        return crypto
-          .createHash("sha1")
-          .update(der)
-          .digest("hex")
-          .match(/.{2}/g)
-          .join(":")
-          .toUpperCase();
-      } catch {
-        return "ERROR";
-      }
-    };
     if (process.env.SAML_DEBUG === "true") {
       console.log(
         "[SAML DEBUG] getMetadata spCert length:",
