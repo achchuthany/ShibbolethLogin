@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Redirecting to SLGTI IdP...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .redirect-container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .fallback-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .fallback-button:hover {
+            background: #5a6fd8;
+        }
+    </style>
+</head>
+<body>
+    <div class="redirect-container">
+        <h2>Redirecting to SLGTI IdP...</h2>
+        <div class="spinner"></div>
+        <p>You are being redirected to the SLGTI login page.</p>
+        <p><small>If this page doesn't redirect automatically, click the button below:</small></p>
+        
+        <form id="samlForm" method="post" action="{{destination}}">
+            <input type="hidden" name="SAMLRequest" value="{{samlRequest}}" />
+            <input type="submit" value="Continue to SLGTI Login" class="fallback-button" />
+        </form>
+    </div>
+
+    <script>
+        // Auto-submit after a short delay to show the loading message
+        setTimeout(function() {
+            document.getElementById('samlForm').submit();
+        }, 1500);
+    </script>
+</body>
+</html>

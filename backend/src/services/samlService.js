@@ -39,6 +39,25 @@ const ATTRIBUTE_OID_MAP = {
 };
 
 class SamlService {
+  // Helper function to compute certificate fingerprint
+  static computeFingerprint(pem) {
+    try {
+      const b64 = pem
+        .replace(/-----.*CERTIFICATE-----/g, "")
+        .replace(/\s+/g, "");
+      const der = Buffer.from(b64, "base64");
+      return crypto
+        .createHash("sha1")
+        .update(der)
+        .digest("hex")
+        .match(/.{2}/g)
+        .join(":")
+        .toUpperCase();
+    } catch {
+      return "ERROR";
+    }
+  }
+
   static initializePassport() {
     // Check if we have required configuration
     if (!process.env.IDP_SSO_URL) {
@@ -127,24 +146,7 @@ class SamlService {
       }
     }
 
-    // Helper function to compute certificate fingerprint
-    const computeFingerprint = (pem) => {
-      try {
-        const b64 = pem
-          .replace(/-----.*CERTIFICATE-----/g, "")
-          .replace(/\s+/g, "");
-        const der = Buffer.from(b64, "base64");
-        return crypto
-          .createHash("sha1")
-          .update(der)
-          .digest("hex")
-          .match(/.{2}/g)
-          .join(":")
-          .toUpperCase();
-      } catch {
-        return "ERROR";
-      }
-    };
+
 
     // Load IdP signing cert(s) (support file + multi-cert separation)
     const loadIdpCerts = () => {
@@ -202,7 +204,7 @@ class SamlService {
         norm.forEach((cert, i) => {
           console.log(
             `[SAML DEBUG] Cert ${i + 1} fingerprint:`,
-            computeFingerprint(cert)
+            SamlService.computeFingerprint(cert)
           );
         });
       }
@@ -300,7 +302,7 @@ class SamlService {
         console.log("[SAML DEBUG] IdP certs count:", idpCertLoaded.length);
         idpCertLoaded.forEach((c, i) =>
           console.log(
-            `  [IdP Cert ${i}] len=${c.length} fp=${computeFingerprint(c)}`
+            `  [IdP Cert ${i}] len=${c.length} fp=${SamlService.computeFingerprint(c)}`
           )
         );
       } else {
@@ -308,7 +310,7 @@ class SamlService {
           "[SAML DEBUG] IdP cert len:",
           idpCertLoaded && idpCertLoaded.length,
           "fp=",
-          computeFingerprint(idpCertLoaded)
+          SamlService.computeFingerprint(idpCertLoaded)
         );
       }
     }
@@ -661,12 +663,12 @@ class SamlService {
           idpCertLoaded.length
         );
         idpCertLoaded.forEach((c, i) =>
-          console.log(`  [IdP Cert ${i} metadata] fp=${computeFingerprint(c)}`)
+          console.log(`  [IdP Cert ${i} metadata] fp=${SamlService.computeFingerprint(c)}`)
         );
       } else {
         console.log(
           "[SAML DEBUG] IdP cert (metadata) fp:",
-          computeFingerprint(idpCertLoaded)
+          SamlService.computeFingerprint(idpCertLoaded)
         );
       }
     }
